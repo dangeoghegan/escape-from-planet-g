@@ -21,6 +21,8 @@ export class HazardManager {
         return new FallingObstacle(idx, cfg);
       } else if (type === 'vent') {
         return new VolcanicVent(idx, cfg);
+      } else if (type === 'barrier') {
+        return new BarrierHazard(idx, cfg);
       }
       return null;
     }).filter(Boolean);
@@ -39,6 +41,57 @@ export class HazardManager {
         h.reset();
       }
     }
+  }
+
+  checkProjectileHits(projectiles = []) {
+    const destroyedEvents = [];
+    if (!projectiles || projectiles.length === 0) return destroyedEvents;
+
+    for (let pIdx = projectiles.length - 1; pIdx >= 0; pIdx--) {
+      const p = projectiles[pIdx];
+      let pConsumed = false;
+
+      for (const h of this.hazards) {
+        if (!h.isDestructible || h.isDestroyed) continue;
+
+        // Check if projectile overlaps target in s, x, y
+        const ds = Math.abs(p.s - h.s);
+        const targetRadius = h.targetRadius || h.radius || 2.5;
+
+        if (ds <= (p.radius + targetRadius + 2.5)) {
+          const tx = (h.ledgeX !== undefined) ? h.ledgeX : (h.x !== undefined ? h.x : 0);
+          const ty = (h.ledgeY !== undefined) ? h.ledgeY : (h.y !== undefined ? h.y : 0);
+          const dx = p.x - tx;
+          const dy = p.y - ty;
+          const dist2D = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist2D <= (p.radius + targetRadius)) {
+            pConsumed = true;
+            h.health -= p.damage || 25;
+
+            if (h.health <= 0) {
+              h.isDestroyed = true;
+              h.state = 'finished';
+              destroyedEvents.push({
+                type: h.type,
+                hazard: h,
+                score: h.scoreVal || 100,
+                x: h.x || h.ledgeX || 0,
+                y: h.y || h.ledgeY || 0,
+                s: h.s,
+              });
+            }
+            break;
+          }
+        }
+      }
+
+      if (pConsumed) {
+        projectiles.splice(pIdx, 1);
+      }
+    }
+
+    return destroyedEvents;
   }
 
   update(dt, ship, route) {
@@ -79,6 +132,13 @@ export class SpearHazard {
     this.projS = this.s;
     this.windupTimer = 0;
     this.hasHit = false;
+
+    // Combat destructibility
+    this.isDestructible = true;
+    this.isDestroyed = false;
+    this.health = 25;
+    this.scoreVal = 200; // 200 points for shooting down a Tallow scout
+    this.targetRadius = 3.5;
   }
 
   reset() {
@@ -89,9 +149,16 @@ export class SpearHazard {
     this.projS = this.s;
     this.windupTimer = 0;
     this.hasHit = false;
+    this.isDestroyed = false;
+    this.health = 25;
   }
 
   update(dt, ship) {
+    if (this.isDestroyed) {
+      this.state = 'finished';
+      return;
+    }
+
     const distToShip = this.s - ship.s;
 
     if (this.state === 'idle') {
@@ -327,6 +394,55 @@ export class VolcanicVent {
           damage: this.damage,
           x: this.x,
           y: ship.y,
+          s: this.s,
+        };
+      }
+    }
+    return null;
+  }
+}
+
+export class BarrierHazard {
+  constructor(id, cfg) {
+    this.id = id;
+    this.type = 'barrier';
+    this.s = cfg.s;
+    this.x = cfg.x || 0;
+    this.y = cfg.y || 0;
+    this.radius = cfg.radius || 3.0;
+    this.targetRadius = this.radius;
+    this.damage = cfg.damage || 20;
+    this.health = cfg.health || 25;
+    this.isDestructible = true;
+    this.isDestroyed = false;
+    this.scoreVal = 100;
+  }
+
+  reset() {
+    this.isDestroyed = false;
+    this.health = 25;
+  }
+
+  update(dt, ship) {
+    // Static destructible obstacle in corridor
+  }
+
+  checkCollision(ship) {
+    if (this.isDestroyed) return null;
+
+    const ds = Math.abs(ship.s - this.s);
+    if (ds < (ship.radius + this.radius)) {
+      const dx = ship.x - this.x;
+      const dy = ship.y - this.y;
+      const dist2D = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist2D < (ship.radius + this.radius)) {
+        return {
+          type: 'barrier',
+          hazard: this,
+          damage: this.damage,
+          x: this.x,
+          y: this.y,
           s: this.s,
         };
       }

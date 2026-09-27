@@ -23,6 +23,7 @@ class GameApp {
       pitchDown: false,
       boost: false,
       brake: false,
+      fire: false,
     };
 
     // Game systems
@@ -34,6 +35,7 @@ class GameApp {
       onExtractionComplete: () => this.handleExtractionComplete(),
       onVictory: (info) => this.handleVictory(info),
       onFailure: () => this.handleFailure(),
+      onTargetDestroyed: (d) => this.handleTargetDestroyed(d),
     });
 
     this.sceneManager = new SceneManager(this.canvasContainer);
@@ -120,6 +122,11 @@ class GameApp {
       if (e.code === 'KeyW' || e.code === 'ArrowUp') this.input.pitchUp = true;
       if (e.code === 'KeyS' || e.code === 'ArrowDown') this.input.pitchDown = true;
 
+      // Combat Firing
+      if (e.code === 'KeyF' || e.code === 'KeyJ' || e.code === 'Enter') {
+        this.input.fire = true;
+      }
+
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
         if (!this.input.boost && this.levelManager.ship.boostCharge > 15) {
           sound.playBoost();
@@ -140,8 +147,18 @@ class GameApp {
       if (e.code === 'KeyD' || e.code === 'ArrowRight') this.input.steerRight = false;
       if (e.code === 'KeyW' || e.code === 'ArrowUp') this.input.pitchUp = false;
       if (e.code === 'KeyS' || e.code === 'ArrowDown') this.input.pitchDown = false;
+      if (e.code === 'KeyF' || e.code === 'KeyJ' || e.code === 'Enter') this.input.fire = false;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.input.boost = false;
       if (e.code === 'Space') this.input.brake = false;
+    });
+
+    // Pointer click to fire in-flight
+    this.canvasContainer.addEventListener('pointerdown', (e) => {
+      this.ensureAudio();
+      if (this.levelManager.state === GAME_STATES.PLAYING) {
+        this.input.fire = true;
+        setTimeout(() => { this.input.fire = false; }, 80);
+      }
     });
 
     // Touch / pointer audio gesture trigger
@@ -315,6 +332,16 @@ class GameApp {
     this.menuManager.setScreen('failed');
   }
 
+  handleTargetDestroyed(d) {
+    sound.playTargetHit();
+    const frame = this.levelManager.route.getFrameAt(d.s);
+    const targetPos = frame.pos.clone()
+      .addScaledVector(frame.right, d.x)
+      .addScaledVector(frame.up, d.y);
+    this.sceneManager.effects.triggerCrashExplosion(targetPos);
+    this.hud.showScorePopup(d.score, d.type);
+  }
+
   gameLoop(currentTime) {
     requestAnimationFrame((t) => this.gameLoop(t));
 
@@ -330,6 +357,11 @@ class GameApp {
     }
 
     // Active gameplay update
+    if (this.input.fire && this.levelManager.ship.isAlive && this.levelManager.ship.fireCooldownTimer <= 0) {
+      sound.playLaser();
+      this.sceneManager.shipModel.triggerMuzzleFlash();
+    }
+
     this.levelManager.update(dt, this.input);
 
     // Audio engine pitch modulation

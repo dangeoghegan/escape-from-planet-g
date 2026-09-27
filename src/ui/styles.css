@@ -114,6 +114,45 @@ html, body {
   cursor: pointer;
 }
 
+.badge-gold {
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--neon-gold);
+  border-color: var(--neon-gold);
+}
+
+.hud-score-popup {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #ffd700;
+  text-shadow: 0 0 20px #ffaa00, 0 0 35px #ff7700;
+  pointer-events: none;
+  z-index: 15;
+  text-align: center;
+}
+
+.score-sub {
+  display: block;
+  font-size: 0.95rem;
+  color: #00ffff;
+  letter-spacing: 1px;
+}
+
+.score-pop-anim {
+  animation: scorePopup 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes scorePopup {
+  0% { opacity: 0; transform: translate(-50%, -20%) scale(0.6); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  75% { opacity: 1; transform: translate(-50%, -65%) scale(1.0); }
+  100% { opacity: 0; transform: translate(-50%, -85%) scale(0.9); }
+}
+
 .objective-text {
   font-size: 0.95rem;
   font-weight: 600;

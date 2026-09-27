@@ -30,14 +30,14 @@ describe('Full 5-Level Campaign Playthrough Simulation', () => {
         // In Level 5, if approaching extraction dais, hover and brake to rescue Odette
         if (levelNum === 5 && !lm.isExtracted) {
           const extS = lm.levelConfig.extractionS;
-          if (Math.abs(lm.ship.s - extS) < 15) {
+          if (Math.abs(lm.ship.s - extS) <= 22) {
             lm.update(0.1, { brake: true });
             continue;
           }
         }
 
-        // Standard forward flight
-        lm.update(0.1, {});
+        // Standard forward flight with combat firing enabled
+        lm.update(0.1, { fire: true });
 
         // Mid-level camera switch check
         if (stepCount === 50) {

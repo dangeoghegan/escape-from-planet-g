@@ -38,10 +38,11 @@ export class HUD {
       <!-- Red Damage Screen Vignette -->
       <div id="damage-vignette" class="damage-vignette"></div>
 
-      <!-- Top Bar: Level, Objective, Mute/Pause Controls -->
+      <!-- Top Bar: Level, Objective, Score, Mute/Pause Controls -->
       <div class="hud-top-bar">
         <div class="hud-panel hud-level-panel">
           <span id="hud-level-badge" class="badge">LEVEL 1</span>
+          <span id="hud-score-badge" class="badge badge-gold">SCORE: 0</span>
           <span id="hud-objective" class="objective-text">Fly through Storm Canyon and enter Cavern Maw</span>
         </div>
         <div class="hud-top-right">
@@ -50,6 +51,9 @@ export class HUD {
           <button id="hud-btn-pause" class="hud-icon-btn" title="Pause Game [Esc]">⏸</button>
         </div>
       </div>
+
+      <!-- Floating Score Popup -->
+      <div id="hud-score-popup" class="hud-score-popup" style="display: none;"></div>
 
       <!-- Extraction Progress (shown in Level 5) -->
       <div id="hud-extraction-box" class="hud-extraction-box" style="display: none;">
@@ -116,6 +120,8 @@ export class HUD {
     this.boostText = this.element.querySelector('#hud-boost-text');
     this.objectiveText = this.element.querySelector('#hud-objective');
     this.levelBadge = this.element.querySelector('#hud-level-badge');
+    this.scoreBadge = this.element.querySelector('#hud-score-badge');
+    this.scorePopup = this.element.querySelector('#hud-score-popup');
     this.cameraBadge = this.element.querySelector('#hud-camera-badge');
     this.extractionBox = this.element.querySelector('#hud-extraction-box');
     this.extractionFill = this.element.querySelector('#hud-extraction-fill');
@@ -144,6 +150,19 @@ export class HUD {
       this.damageVignette.classList.add('vignette-flash');
       setTimeout(() => this.damageVignette.classList.remove('vignette-flash'), 300);
     }
+  }
+
+  showScorePopup(pts, type) {
+    if (!this.scorePopup) return;
+    const label = type === 'tallow' ? 'TALLOW ELIMINATED!' : 'BARRIER SHATTERED!';
+    this.scorePopup.innerHTML = `+${pts} <span class="score-sub">${label}</span>`;
+    this.scorePopup.style.display = 'block';
+    this.scorePopup.classList.remove('score-pop-anim');
+    void this.scorePopup.offsetWidth; // re-flow
+    this.scorePopup.classList.add('score-pop-anim');
+    setTimeout(() => {
+      if (this.scorePopup) this.scorePopup.style.display = 'none';
+    }, 1200);
   }
 
   showComms(speaker, message, duration = 4.0) {
@@ -207,8 +226,11 @@ export class HUD {
       this.boostFill.style.background = '#00ccff';
     }
 
-    // 4. Level & Objective
+    // 4. Level & Objective & Score
     this.levelBadge.textContent = `LEVEL ${levelCfg.id}: ${levelCfg.name.toUpperCase()}`;
+    if (this.scoreBadge) {
+      this.scoreBadge.textContent = `SCORE: ${ship.score || 0}`;
+    }
     this.objectiveText.textContent = String(levelManager.getCurrentObjective());
 
     // 5. Camera mode indicator

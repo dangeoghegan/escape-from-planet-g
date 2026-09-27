@@ -51,6 +51,12 @@ export class Ship {
     // Camera mode: 'chase' or 'cockpit'
     this.cameraMode = 'chase';
 
+    // Combat & Weapons
+    this.fireCooldownTimer = 0;
+    this.fireCooldown = 0.18; // ~5.5 shots per second
+    this.projectiles = []; // Active laser bolts
+    this.score = 0;
+
     // Settings ref
     this.invertPitch = false;
 
@@ -76,6 +82,8 @@ export class Ship {
     this.damageCooldownTimer = 0;
     this.isBoosting = false;
     this.isBraking = false;
+    this.projectiles = [];
+    this.fireCooldownTimer = 0;
   }
 
   toggleCamera() {
@@ -87,6 +95,41 @@ export class Ship {
     if (mode === 'chase' || mode === 'cockpit') {
       this.cameraMode = mode;
     }
+  }
+
+  fire() {
+    if (!this.isAlive || this.fireCooldownTimer > 0) return null;
+
+    this.fireCooldownTimer = this.fireCooldown;
+    const laserSpeed = this.speed + 180; // High velocity projectile
+
+    // Left and right wingtip cannons
+    const leftBolt = {
+      id: Math.random(),
+      s: this.s + 3.0,
+      x: this.x - 2.5,
+      y: this.y,
+      speed: laserSpeed,
+      damage: 25,
+      radius: 0.9,
+      age: 0,
+      maxAge: 1.5,
+    };
+
+    const rightBolt = {
+      id: Math.random(),
+      s: this.s + 3.0,
+      x: this.x + 2.5,
+      y: this.y,
+      speed: laserSpeed,
+      damage: 25,
+      radius: 0.9,
+      age: 0,
+      maxAge: 1.5,
+    };
+
+    this.projectiles.push(leftBolt, rightBolt);
+    return [leftBolt, rightBolt];
   }
 
   takeDamage(amount, source = 'impact') {
@@ -120,12 +163,30 @@ export class Ship {
     if (this.damageCooldownTimer > 0) {
       this.damageCooldownTimer = Math.max(0, this.damageCooldownTimer - dt);
     }
+    if (this.fireCooldownTimer > 0) {
+      this.fireCooldownTimer = Math.max(0, this.fireCooldownTimer - dt);
+    }
+
+    // Update active projectiles
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const p = this.projectiles[i];
+      p.s += p.speed * dt;
+      p.age += dt;
+      if (p.age >= p.maxAge) {
+        this.projectiles.splice(i, 1);
+      }
+    }
 
     // If dead, physics are locked or handled by cinematic crash tumble
     if (!this.isAlive) {
       this.speed = Math.max(0, this.speed - this.brakeDecel * dt * 0.5);
       this.s += this.speed * dt;
       return;
+    }
+
+    // Fire weapon if requested
+    if (input.fire) {
+      this.fire();
     }
 
     // Input interpretation
