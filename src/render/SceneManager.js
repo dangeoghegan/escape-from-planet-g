@@ -1,5 +1,6 @@
 /**
- * SceneManager.js - Orchestrates Three.js rendering, lighting, camera, and level transitions.
+ * SceneManager.js - Orchestrates Three.js rendering, dynamic forward headlights,
+ * tunnel illumination, cockpit & chase cameras, and level transitions.
  */
 import * as THREE from 'three';
 import { ShipModel } from './ShipModel.js';
@@ -16,7 +17,7 @@ export class SceneManager {
 
     // 1. Scene, Camera, Renderer
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1200);
     this.cameraSystem = new CameraSystem(this.camera);
 
     this.renderer = new THREE.WebGLRenderer({
@@ -26,22 +27,38 @@ export class SceneManager {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 1.25;
     this.container.appendChild(this.renderer.domElement);
 
-    // 2. Lighting
-    this.ambientLight = new THREE.AmbientLight(0x405060, 1.2);
+    // 2. Scene Ambient & Directional Lighting
+    this.ambientLight = new THREE.AmbientLight(0x70859b, 1.4);
     this.scene.add(this.ambientLight);
 
-    this.dirLight = new THREE.DirectionalLight(0xffeedd, 1.8);
-    this.dirLight.position.set(20, 50, 30);
+    this.dirLight = new THREE.DirectionalLight(0xffeedd, 1.6);
+    this.dirLight.position.set(30, 80, 20);
     this.scene.add(this.dirLight);
 
-    // Local light following the ship
-    this.shipLight = new THREE.PointLight(0x00d4ff, 1.5, 35);
-    this.scene.add(this.shipLight);
+    // 3. Dynamic Dual Forward Headlights (Illuminating the cavern 200m ahead!)
+    this.headlightTarget = new THREE.Object3D();
+    this.scene.add(this.headlightTarget);
 
-    // 3. Components
+    this.headlightL = new THREE.SpotLight(0xcceeff, 5.0, 280, 0.55, 0.4, 1.2);
+    this.headlightL.target = this.headlightTarget;
+    this.scene.add(this.headlightL);
+
+    this.headlightR = new THREE.SpotLight(0xcceeff, 5.0, 280, 0.55, 0.4, 1.2);
+    this.headlightR.target = this.headlightTarget;
+    this.scene.add(this.headlightR);
+
+    // Forward fill light for immediate tunnel visibility
+    this.forwardFillLight = new THREE.PointLight(0x00f0ff, 2.5, 90);
+    this.scene.add(this.forwardFillLight);
+
+    // Ship proximity light (illuminating the fighter craft itself)
+    this.shipProximityLight = new THREE.PointLight(0xffffff, 2.0, 30);
+    this.scene.add(this.shipProximityLight);
+
+    // 4. Components
     this.shipModel = new ShipModel();
     this.scene.add(this.shipModel.group);
 
@@ -69,22 +86,24 @@ export class SceneManager {
   }
 
   loadLevel(levelConfig, route, hazardManager) {
-    // Clean up previous level meshes
     if (this.corridorRenderer) this.scene.remove(this.corridorRenderer.group);
     if (this.charactersRenderer) this.scene.remove(this.charactersRenderer.group);
     if (this.hazardRenderer) this.scene.remove(this.hazardRenderer.group);
     this.effects.clear();
 
-    // Scene Fog & Ambient styling
-    const fogColor = new THREE.Color(levelConfig.fogColor || 0x111622);
+    // Atmospheric Fog (generous viewing distance so player can clearly see route curves!)
+    const fogColor = new THREE.Color(levelConfig.fogColor || 0x182436);
     this.scene.background = fogColor;
     this.scene.fog = new THREE.Fog(
       fogColor,
-      levelConfig.fogNear || 35,
-      levelConfig.fogFar || 260
+      levelConfig.fogNear || 90,
+      levelConfig.fogFar || 480
     );
 
-    this.ambientLight.color.setHex(levelConfig.ambientColor || 0x445566);
+    // Biome ambient tinting
+    const baseAmbient = new THREE.Color(levelConfig.ambientColor || 0x607590);
+    this.ambientLight.color.copy(baseAmbient);
+    this.ambientLight.intensity = 1.4;
 
     // Build fresh level meshes
     this.corridorRenderer = new CorridorRenderer(route, levelConfig);
@@ -100,6 +119,7 @@ export class SceneManager {
   update(levelManager, dt) {
     const ship = levelManager.ship;
     const route = levelManager.route;
+    const frame = route.getFrameAt(ship.s);
 
     // Update camera mode
     this.cameraSystem.setMode(ship.cameraMode);
@@ -117,8 +137,29 @@ export class SceneManager {
       this.shipModel.update(ship, dt);
     }
 
-    // Ship light follows ship
-    this.shipLight.position.copy(ship.worldPosition);
+    // Dynamic Headlights position & aim:
+    // Aim 60m ahead along tangent (forward flight direction)
+    const aimTargetPos = ship.worldPosition.clone().addScaledVector(frame.tangent, 70);
+    this.headlightTarget.position.copy(aimTargetPos);
+
+    // Left and right headlights on ship nose
+    this.headlightL.position.copy(ship.worldPosition)
+      .addScaledVector(frame.right, -1.6)
+      .addScaledVector(frame.up, 0.4)
+      .addScaledVector(frame.tangent, 2.0);
+
+    this.headlightR.position.copy(ship.worldPosition)
+      .addScaledVector(frame.right, 1.6)
+      .addScaledVector(frame.up, 0.4)
+      .addScaledVector(frame.tangent, 2.0);
+
+    // Forward fill light 30m ahead
+    this.forwardFillLight.position.copy(ship.worldPosition)
+      .addScaledVector(frame.tangent, 30);
+
+    // Proximity light right on ship
+    this.shipProximityLight.position.copy(ship.worldPosition)
+      .addScaledVector(frame.up, 2.0);
 
     // Update camera position
     this.cameraSystem.update(ship, route, dt, this.effects);
@@ -140,7 +181,6 @@ export class SceneManager {
     // If crashing, emit smoke trail
     if (levelManager.state === 'CRASH_CINEMATIC') {
       this.effects.addSmokePuff(ship.worldPosition);
-      // Tumble ship
       ship.pitch += 4 * dt;
       ship.roll += 6 * dt;
     }

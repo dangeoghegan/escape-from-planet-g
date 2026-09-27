@@ -48,6 +48,7 @@ export class LevelManager {
     this.onExtractionComplete = options.onExtractionComplete || null;
     this.onVictory = options.onVictory || null;
     this.onFailure = options.onFailure || null;
+    this.onTargetDestroyed = options.onTargetDestroyed || null;
 
     this.loadLevel(1);
   }
@@ -165,6 +166,15 @@ export class LevelManager {
       }
     }
 
+    // Process weapon projectile collisions with destructible targets
+    const destroyedTargets = this.hazards.checkProjectileHits(this.ship.projectiles);
+    for (const d of destroyedTargets) {
+      this.ship.score = (this.ship.score || 0) + d.score;
+      if (this.onTargetDestroyed) {
+        this.onTargetDestroyed(d);
+      }
+    }
+
     // Check checkpoints along route
     for (const cp of this.route.checkpoints) {
       if (this.ship.s >= cp.s && !this.passedCheckpoints.has(cp.id)) {
@@ -246,6 +256,7 @@ export class LevelManager {
         this.onVictory({
           levelId: this.currentLevelId,
           hullRemaining: this.ship.hull,
+          score: this.ship.score || 0,
           isCampaignComplete: this.currentLevelId === 5,
         });
       }

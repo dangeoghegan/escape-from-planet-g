@@ -90,6 +90,7 @@ export class MenuManager {
               <tr><td><kbd>W</kbd> / <kbd>S</kbd></td><td>Pitch Up / Down</td><td>Control vertical climb and dive</td></tr>
               <tr><td><kbd>A</kbd> / <kbd>D</kbd></td><td>Steer Left / Right</td><td>Bank and steer through caverns</td></tr>
               <tr><td><kbd>Arrow Keys</kbd></td><td>Alternate Steering</td><td>Full directional flight steering</td></tr>
+              <tr><td><kbd>F</kbd> / <kbd>J</kbd> / <kbd>Enter</kbd> / <kbd>Click</kbd></td><td>Fire Plasma Cannons</td><td>Blast Tallow scouts & destructible rock barriers</td></tr>
               <tr><td><kbd>Shift</kbd></td><td>Boost</td><td>High-speed rocket burst (drains boost bar)</td></tr>
               <tr><td><kbd>Space</kbd></td><td>Brake / Hover</td><td>Decelerate to cruise speed; hover for extraction</td></tr>
               <tr><td><kbd>V</kbd></td><td>Toggle Camera</td><td>Switch between Cockpit and Chase views</td></tr>
@@ -386,6 +387,7 @@ export class MenuManager {
 
     if (statsBox) {
       statsBox.innerHTML = `
+        <div class="stat-row"><span>Combat Score:</span> <strong>${info.score || 0} PTS</strong></div>
         <div class="stat-row"><span>Hull Remaining:</span> <strong>${Math.round(info.hullRemaining)}%</strong></div>
         <div class="stat-row"><span>Status:</span> <strong>${isCampaign ? 'Resistance Victorious' : 'Sector Clear'}</strong></div>
       `;

@@ -1,6 +1,7 @@
 /**
  * HazardRenderer.js - 3D visual representations of active hazards:
- * flying spears with unicorn-horn tips, swinging pendulums, telegraphed falling rocks, and volcanic vents.
+ * flying spears with unicorn-horn tips, swinging pendulums, telegraphed falling rocks,
+ * volcanic vents, destructible barriers, and player laser bolts.
  */
 import * as THREE from 'three';
 
@@ -14,16 +15,50 @@ export class HazardRenderer {
     this.swingMeshes = new Map();
     this.fallingMeshes = new Map();
     this.ventMeshes = new Map();
+    this.barrierMeshes = new Map();
+
+    // Laser projectile meshes pool
+    this.laserPool = [];
+    this.initLaserPool();
 
     this.buildHazardMeshes();
   }
 
+  initLaserPool() {
+    const laserMat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+    });
+    const laserGlowMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+    });
+
+    for (let i = 0; i < 20; i++) {
+      const laserGroup = new THREE.Group();
+
+      // Outer glowing bolt
+      const boltGeo = new THREE.CylinderGeometry(0.12, 0.12, 3.2, 6);
+      boltGeo.rotateX(Math.PI / 2);
+      const bolt = new THREE.Mesh(boltGeo, laserMat);
+      laserGroup.add(bolt);
+
+      // Core bright core
+      const coreGeo = new THREE.CylinderGeometry(0.06, 0.06, 2.6, 6);
+      coreGeo.rotateX(Math.PI / 2);
+      const core = new THREE.Mesh(coreGeo, laserGlowMat);
+      laserGroup.add(core);
+
+      laserGroup.visible = false;
+      this.laserPool.push(laserGroup);
+      this.group.add(laserGroup);
+    }
+  }
+
   buildHazardMeshes() {
-    this.group.clear();
     this.spearMeshes.clear();
     this.swingMeshes.clear();
     this.fallingMeshes.clear();
     this.ventMeshes.clear();
+    this.barrierMeshes.clear();
 
     const hazards = this.hazardManager.hazards || [];
 
@@ -36,6 +71,8 @@ export class HazardRenderer {
         this.createFallingVisual(h);
       } else if (h.type === 'vent') {
         this.createVentVisual(h);
+      } else if (h.type === 'barrier') {
+        this.createBarrierVisual(h);
       }
     });
   }
@@ -55,7 +92,7 @@ export class HazardRenderer {
     hornGeo.rotateX(Math.PI / 2);
     const hornMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      emissive: 0x77ccff,
+      emissive: 0x00f0ff,
       metalness: 0.8,
       roughness: 0.2,
     });
@@ -85,7 +122,7 @@ export class HazardRenderer {
       dashSize: 1.5,
       gapSize: 1.0,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
     });
     const aimLine = new THREE.Line(lineGeo, lineMat);
     aimLine.visible = false;
@@ -104,17 +141,30 @@ export class HazardRenderer {
     const bobGeo = new THREE.DodecahedronGeometry(h.radius, 1);
     const bobMat = new THREE.MeshStandardMaterial({
       color: 0x483d35,
-      roughness: 0.9,
+      roughness: 0.85,
       metalness: 0.3,
     });
     const bob = new THREE.Mesh(bobGeo, bobMat);
     swingGroup.add(bob);
 
+    // Glowing warning spikes
+    for (let i = 0; i < 6; i++) {
+      const spikeGeo = new THREE.ConeGeometry(0.3, 1.2, 5);
+      const spikeMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+      const spike = new THREE.Mesh(spikeGeo, spikeMat);
+      spike.position.set(
+        Math.sin(i * 1.05) * h.radius,
+        Math.cos(i * 1.05) * h.radius,
+        0
+      );
+      swingGroup.add(spike);
+    }
+
     // Suspension cable/root
-    const cableGeo = new THREE.CylinderGeometry(0.08, 0.08, 12, 6);
+    const cableGeo = new THREE.CylinderGeometry(0.08, 0.08, 14, 6);
     const cableMat = new THREE.MeshStandardMaterial({ color: 0x2e1d13, roughness: 0.9 });
     const cable = new THREE.Mesh(cableGeo, cableMat);
-    cable.position.y = 6;
+    cable.position.y = 7;
     swingGroup.add(cable);
 
     this.group.add(swingGroup);
@@ -125,23 +175,23 @@ export class HazardRenderer {
     const fallingGroup = new THREE.Group();
 
     // Falling Rock / Crystal Stalactite
-    const rockGeo = new THREE.ConeGeometry(h.radius * 0.9, 5.0, 6);
+    const rockGeo = new THREE.ConeGeometry(h.radius * 0.9, 6.0, 6);
     rockGeo.rotateX(Math.PI);
     const rockMat = new THREE.MeshStandardMaterial({
       color: 0x584f68,
-      emissive: 0x1f162e,
-      roughness: 0.8,
+      emissive: 0x241838,
+      roughness: 0.75,
     });
     const rock = new THREE.Mesh(rockGeo, rockMat);
     fallingGroup.add(rock);
 
     // Warning Reticle on floor
-    const warningRingGeo = new THREE.RingGeometry(h.radius * 0.8, h.radius * 1.3, 16);
+    const warningRingGeo = new THREE.RingGeometry(h.radius * 0.8, h.radius * 1.4, 20);
     warningRingGeo.rotateX(-Math.PI / 2);
     const warningMat = new THREE.MeshBasicMaterial({
       color: 0xff2244,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
       side: THREE.DoubleSide,
     });
     const warningRing = new THREE.Mesh(warningRingGeo, warningMat);
@@ -167,7 +217,7 @@ export class HazardRenderer {
     const flameMat = new THREE.MeshBasicMaterial({
       color: 0xff5500,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
       side: THREE.DoubleSide,
     });
     const flame = new THREE.Mesh(flameGeo, flameMat);
@@ -180,7 +230,7 @@ export class HazardRenderer {
     const smokeMat = new THREE.MeshBasicMaterial({
       color: 0xffaa44,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.45,
     });
     const smoke = new THREE.Mesh(smokeGeo, smokeMat);
     smoke.position.y = 3.0;
@@ -191,14 +241,45 @@ export class HazardRenderer {
     this.ventMeshes.set(h.id, { ventGroup, flame, smoke, hazard: h });
   }
 
+  createBarrierVisual(h) {
+    const barrierGroup = new THREE.Group();
+
+    // Destructible Rock/Crystal Wall
+    const geo = new THREE.DodecahedronGeometry(h.radius, 1);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x6e5244,
+      emissive: 0xaa4400,
+      roughness: 0.8,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    barrierGroup.add(mesh);
+
+    // Target Diamond Marker
+    const markerGeo = new THREE.RingGeometry(0.8, 1.0, 4);
+    markerGeo.rotateZ(Math.PI / 4);
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xffd700, side: THREE.DoubleSide });
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    marker.position.z = -h.radius - 0.2;
+    barrierGroup.add(marker);
+
+    this.group.add(barrierGroup);
+    this.barrierMeshes.set(h.id, { barrierGroup, mesh, marker, hazard: h });
+  }
+
   update(dt, ship) {
     // 1. Update Spears
     this.spearMeshes.forEach(item => {
       const h = item.hazard;
+
+      if (h.isDestroyed) {
+        item.aimLine.visible = false;
+        item.spearGroup.visible = false;
+        return;
+      }
+
       const frame = this.route.getFrameAt(h.projS || h.s);
 
       if (h.state === 'windup') {
-        // Show glowing warning line from ledge to target
         item.aimLine.visible = true;
         const start = frame.pos.clone()
           .addScaledVector(frame.right, h.ledgeX)
@@ -218,7 +299,6 @@ export class HazardRenderer {
           .addScaledVector(frame.up, h.projY);
         item.spearGroup.position.copy(pos);
 
-        // Point spear in direction of travel
         const targetWorld = frame.pos.clone()
           .addScaledVector(frame.right, h.targetX)
           .addScaledVector(frame.up, h.targetY);
@@ -238,7 +318,6 @@ export class HazardRenderer {
         .addScaledVector(frame.up, h.currentY);
       item.swingGroup.position.copy(pos);
 
-      // Orient with route frame
       const basis = new THREE.Matrix4().makeBasis(frame.right, frame.up, frame.tangent);
       item.swingGroup.setRotationFromMatrix(basis);
     });
@@ -248,24 +327,20 @@ export class HazardRenderer {
       const h = item.hazard;
       const frame = this.route.getFrameAt(h.s);
 
-      // Warning reticle on floor
       if (h.state === 'warning') {
         item.warningRing.visible = true;
         const floorPos = frame.pos.clone()
           .addScaledVector(frame.right, h.x)
-          .addScaledVector(frame.up, -frame.radius + 1.0);
+          .addScaledVector(frame.up, -frame.radius + 1.2);
         item.warningRing.position.copy(floorPos);
 
         const basis = new THREE.Matrix4().makeBasis(frame.right, frame.tangent, frame.up);
         item.warningRing.setRotationFromMatrix(basis);
-
-        // Pulse warning ring
-        item.warningRing.scale.setScalar(1.0 + 0.2 * Math.sin(Date.now() * 0.015));
+        item.warningRing.scale.setScalar(1.0 + 0.25 * Math.sin(Date.now() * 0.018));
       } else {
         item.warningRing.visible = false;
       }
 
-      // Falling rock body
       if (h.state === 'falling' || h.state === 'grounded') {
         item.fallingGroup.visible = true;
         const pos = frame.pos.clone()
@@ -293,16 +368,57 @@ export class HazardRenderer {
       if (h.state === 'warning') {
         item.smoke.visible = true;
         item.flame.visible = false;
-        item.smoke.scale.setScalar(1.0 + 0.3 * Math.sin(Date.now() * 0.02));
+        item.smoke.scale.setScalar(1.0 + 0.35 * Math.sin(Date.now() * 0.02));
       } else if (h.state === 'active') {
         item.smoke.visible = false;
         item.flame.visible = true;
-        item.flame.scale.x = 0.9 + Math.random() * 0.2;
-        item.flame.scale.z = 0.9 + Math.random() * 0.2;
+        item.flame.scale.x = 0.9 + Math.random() * 0.25;
+        item.flame.scale.z = 0.9 + Math.random() * 0.25;
       } else {
         item.smoke.visible = false;
         item.flame.visible = false;
       }
     });
+
+    // 5. Update Destructible Barriers
+    this.barrierMeshes.forEach(item => {
+      const h = item.hazard;
+      if (h.isDestroyed) {
+        item.barrierGroup.visible = false;
+        return;
+      }
+      item.barrierGroup.visible = true;
+      const frame = this.route.getFrameAt(h.s);
+      const pos = frame.pos.clone()
+        .addScaledVector(frame.right, h.x)
+        .addScaledVector(frame.up, h.y);
+      item.barrierGroup.position.copy(pos);
+
+      if (item.marker) {
+        item.marker.rotation.z += 1.5 * dt;
+      }
+    });
+
+    // 6. Update Player Laser Projectiles
+    const projectiles = ship.projectiles || [];
+    for (let i = 0; i < this.laserPool.length; i++) {
+      const mesh = this.laserPool[i];
+      if (i < projectiles.length) {
+        const p = projectiles[i];
+        const frame = this.route.getFrameAt(p.s);
+        const worldPos = frame.pos.clone()
+          .addScaledVector(frame.right, p.x)
+          .addScaledVector(frame.up, p.y);
+        mesh.position.copy(worldPos);
+
+        // Orient laser along route forward tangent
+        const lookTarget = worldPos.clone().addScaledVector(frame.tangent, 10);
+        mesh.lookAt(lookTarget);
+
+        mesh.visible = true;
+      } else {
+        mesh.visible = false;
+      }
+    }
   }
 }
